@@ -73,7 +73,12 @@ func main() {
 		if d == "" {
 			continue
 		}
-		legoCmd = append(legoCmd, "-d="+d, "-d=www."+d)
+		legoCmd = append(legoCmd, "-d="+d)
+
+		// If this is a sub-domain, we won't also get its "www" sub-domain.
+		if strings.Count(d, ".") <= 1 {
+			legoCmd = append(legoCmd, "-d=www."+d)
+		}
 	}
 
 	legoCmd = append(legoCmd, "run")
