@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 
-	domainsListFileName := os.Args[1]
+	domainsLinesFile := os.Args[1]
 	userEmail := os.Args[2]
 
 	if userEmail == "" || !strings.ContainsRune(userEmail, '@') {
@@ -34,58 +34,66 @@ func main() {
 		return
 	}
 
-	f, err := ioutil.ReadFile(domainsListFileName)
+	f, err := ioutil.ReadFile(domainsLinesFile)
 	if err != nil {
 		fmt.Printf("ERR: %s \n", err)
 		return
 	}
 
-	saFileDir, _ := filepath.Split(domainsListFileName)
+	saFileDir, _ := filepath.Split(domainsLinesFile)
 	saFileName := saFileDir + "sa.json"
 
 	saFile, err := os.Open(saFileName)
 	if err != nil {
 		fmt.Printf("ERR: %v \n", err)
-		os.Exit(1)
+		return
 	}
 	defer saFile.Close()
 
 	saData := make(map[string]interface{}, 10)
 	if err = json.NewDecoder(saFile).Decode(&saData); err != nil {
 		fmt.Printf("Err decoding JSON: %v\n", err)
-		os.Exit(1)
+		return
 	}
 
 	proj, ok := saData["project_id"].(string)
 	if !ok || proj == "" {
 		fmt.Printf("SA file is in the wrong format")
-		os.Exit(1)
+		return
 	}
 
-	domainsList := strings.Split(string(f), "\n")
+	domainsLines := strings.Split(string(f), "\n")
 
-	legoCmd := make([]string, 0, len(domainsList)*2+5)
-	legoCmd = append(legoCmd, "lego")
-
-	legoCmd = append(legoCmd, "--dns=gcloud", "--email="+userEmail, "--key-type=ec256")
-
-	for _, d := range domainsList {
+	domains := make([]string, 0, len(domainsLines)*2)
+	for _, d := range domainsLines {
 		if d == "" {
 			continue
 		}
-		legoCmd = append(legoCmd, "-d="+d)
+		domains = append(domains, d)
 
 		// If this is a sub-domain, we won't also get its "www" sub-domain.
 		if strings.Count(d, ".") <= 1 {
-			legoCmd = append(legoCmd, "-d=www."+d)
+			domains = append(domains, "www."+d)
 		}
+
+		// You cannot request a certificate for www.example.com and *.example.com.
+		if strings.HasPrefix(d, "*.") {
+			domains = removeString(domains, "www"+d[1:])
+		}
+	}
+
+	legoCmd := make([]string, 0, len(domains)+5)
+	legoCmd = append(legoCmd, "lego", "--dns=gcloud", "--email="+userEmail, "--key-type=ec256")
+
+	for _, d := range domains {
+		legoCmd = append(legoCmd, "-d="+d)
 	}
 
 	legoCmd = append(legoCmd, "run")
 
 	legoPath, err := exec.LookPath("lego")
 	if err != nil {
-		log.Fatal("could not find lego path")
+		log.Fatal("Could not find lego program path")
 	}
 
 	cmd := &exec.Cmd{
@@ -102,7 +110,18 @@ func main() {
 
 	if err = cmd.Run(); err != nil {
 		fmt.Println(chalk.Red.Color(fmt.Sprintf("ERR running: %v\n", err)))
-		os.Exit(1)
+		return
 	}
 
+}
+
+func removeString(slice []string, str string) []string {
+	for i := 0; i < len(slice); i++ {
+		if slice[i] == str {
+			fmt.Printf("Removing %q from slice.\n", str)
+			slice = append(slice[:i], slice[i+1:]...)
+			i--
+		}
+	}
+	return slice
 }
