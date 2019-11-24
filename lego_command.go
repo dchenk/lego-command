@@ -14,9 +14,8 @@ import (
 )
 
 func main() {
-
 	if len(os.Args) < 2 {
-		fmt.Println(chalk.Red.Color("Provide the name of the file with a list of domains."))
+		fmt.Println(chalk.Red.Color("Provide the name of the file containing a list of domains."))
 		return
 	}
 
@@ -40,7 +39,13 @@ func main() {
 		return
 	}
 
-	saFileDir, _ := filepath.Split(domainsLinesFile)
+	absPath, err := filepath.Abs(domainsLinesFile)
+	if err != nil {
+		fmt.Printf("ERR: %s \n", err)
+		return
+	}
+
+	saFileDir, _ := filepath.Split(absPath)
 	saFileName := saFileDir + "sa.json"
 
 	saFile, err := os.Open(saFileName)
